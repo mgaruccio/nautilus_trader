@@ -1504,6 +1504,7 @@ test = [
     { name = "pytest-mock" },
     { name = "pytest-rerunfailures" },
     { name = "pytest-xdist", extra = ["psutil"] },
+    { name = "rustimport" },
 ]
 
 [package.metadata]
@@ -1558,6 +1559,7 @@ test = [
     { name = "pytest-mock", specifier = ">=3.15.1,<4.0.0" },
     { name = "pytest-rerunfailures", specifier = ">=16.1,<17.0.0" },
     { name = "pytest-xdist", extras = ["psutil"], specifier = ">=3.8.0,<4.0.0" },
+    { name = "rustimport", specifier = ">=1.7.0" },
 ]
 
 [[package]]
@@ -2564,6 +2566,18 @@ wheels = [
 ]
 
 [[package]]
+name = "rustimport"
+version = "1.7.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "toml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/aa/73/0d45f0803e1f80f0f2fc672c120a74ad2b482a35eff67d327599fbc53856/rustimport-1.7.1.tar.gz", hash = "sha256:0917231d9ef6615868389a4dd8ebdac3155eef769a2d61b39b419ff70ce195f1", size = 33209, upload-time = "2025-05-09T13:50:46.143Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/84/11/85280938aeefcd5cc55dd0d938cf0cdf6451280d5a1cce4da23f2e43d6c9/rustimport-1.7.1-py3-none-any.whl", hash = "sha256:b124205779e781da262bc66c5f19b9da34f9744217aa69485f6e2b6cec9eca7e", size = 30114, upload-time = "2025-05-09T13:50:44.422Z" },
+]
+
+[[package]]
 name = "setuptools"
 version = "82.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2714,6 +2728,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ec/fe/802052aecb21e3797b8f7902564ab6ea0d60ff8ca23952079064155d1ae1/tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c", size = 81090, upload-time = "2022-10-06T17:21:48.54Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/40/44/4a5f08c96eb108af5cb50b41f76142f0afa346dfa99d5296fe7202a11854/tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f", size = 35252, upload-time = "2022-10-06T17:21:44.262Z" },
+]
+
+[[package]]
+name = "toml"
+version = "0.10.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/be/ba/1f744cdc819428fc6b5084ec34d9b30660f6f9daaf70eead706e3203ec3c/toml-0.10.2.tar.gz", hash = "sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f", size = 22253, upload-time = "2020-11-01T01:40:22.204Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/44/6f/7120676b6d73228c96e17f1f794d8ab046fc910d781c8d151120c3f1569e/toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b", size = 16588, upload-time = "2020-11-01T01:40:20.672Z" },
 ]
 
 [[package]]

@@ -49,7 +49,6 @@ use nautilus_common::{
         CacheConfig,
         database::{CacheDatabaseAdapter, CacheMap},
     },
-    custom::CustomData,
     enums::SerializationEncoding,
     live::get_runtime,
     logging::{log_task_awaiting, log_task_started, log_task_stopped},
@@ -59,7 +58,7 @@ use nautilus_core::{UUID4, UnixNanos, correctness::check_slice_not_empty};
 use nautilus_cryptography::providers::install_cryptographic_provider;
 use nautilus_model::{
     accounts::AccountAny,
-    data::{Bar, DataType, FundingRateUpdate, QuoteTick, TradeTick},
+    data::{Bar, CustomData, DataType, FundingRateUpdate, QuoteTick, TradeTick},
     events::{OrderEventAny, OrderSnapshot, position::snapshot::PositionSnapshot},
     identifiers::{
         AccountId, ClientId, ClientOrderId, ComponentId, InstrumentId, PositionId, StrategyId,

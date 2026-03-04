@@ -1129,6 +1129,7 @@ version = "57.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c872d36b7bf2a6a6a2b40de9156265f0242910791db366a2c17476ba8330d68"
 dependencies = [
+ "bitflags",
  "serde_core",
  "serde_json",
 ]
@@ -5492,6 +5493,8 @@ dependencies = [
  "nautilus-core",
  "nautilus-cryptography",
  "nautilus-model",
+ "nautilus-persistence",
+ "nautilus-serialization",
  "pyo3",
  "pyo3-async-runtimes",
  "pyo3-stub-gen",
@@ -5585,15 +5588,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "nautilus-macros"
+version = "0.55.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "nautilus-model"
 version = "0.55.0"
 dependencies = [
  "ahash 0.8.12",
  "alloy-primitives",
  "anyhow",
+ "arrow",
  "cbindgen",
  "chrono",
  "criterion",
+ "dashmap",
  "derive_builder",
  "enum_dispatch",
  "evalexpr",
@@ -5718,10 +5732,12 @@ dependencies = [
  "datafusion",
  "futures",
  "heck",
+ "indexmap 2.13.0",
  "itertools 0.14.0",
  "log",
  "nautilus-common",
  "nautilus-core",
+ "nautilus-macros",
  "nautilus-model",
  "nautilus-serialization",
  "nautilus-testkit",
@@ -5891,6 +5907,7 @@ dependencies = [
 name = "nautilus-serialization"
 version = "0.55.0"
 dependencies = [
+ "anyhow",
  "arrow",
  "capnp 0.25.1",
  "capnpc",
@@ -6873,6 +6890,7 @@ dependencies = [
  "chrono",
  "hashbrown 0.16.1",
  "indexmap 2.13.0",
+ "inventory",
  "libc",
  "once_cell",
  "portable-atomic",

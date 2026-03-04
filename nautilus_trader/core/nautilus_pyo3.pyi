@@ -67,6 +67,7 @@ def last_weekday_nanos(year: int, month: int, day: int) -> int: ...
 def is_within_last_24_hours(timestamp_ns: int) -> bool: ...
 def convert_to_snake_case(input: str) -> str: ...
 def is_pycapsule(obj: object) -> bool: ...
+def deserialize_custom_from_json(type_name: str, payload: bytes) -> CustomData: ...
 
 ###################################################################################################
 # Common
@@ -144,21 +145,18 @@ class Signal:
     def ts_init(self) -> int: ...
 
 class CustomData:
-    def __init__(
-        self,
-        data_type: DataType,
-        value: bytes,
-        ts_event: int,
-        ts_init: int,
-    ) -> None: ...
+    def __init__(self, data: object, data_type: DataType) -> None: ...
+    @property
+    def data(self) -> object: ...
     @property
     def data_type(self) -> DataType: ...
-    @property
-    def value(self) -> str: ...
     @property
     def ts_event(self) -> int: ...
     @property
     def ts_init(self) -> int: ...
+    def to_json_bytes(self) -> bytes: ...
+    @classmethod
+    def from_json_bytes(cls, bytes: bytes) -> CustomData: ...
 
 class FifoCache:
     def __init__(self) -> None: ...
@@ -4600,6 +4598,13 @@ class ParquetDataCatalogV2:
         self,
         instrument_ids: list[str] | None = None,
     ) -> list[object]: ...
+    def write_custom_data(
+        self,
+        data: list[object],
+        start: int | None = None,
+        end: int | None = None,
+        skip_disjoint_check: bool = False,
+    ) -> str: ...
     def consolidate_catalog(
         self,
         start: int | None = None,
@@ -4721,6 +4726,16 @@ class ParquetDataCatalogV2:
         end: int | None = None,
         where_clause: str | None = None,
     ) -> list[IndexPriceUpdate]: ...
+    def query(
+        self,
+        data_type: str,
+        identifiers: list[str] | None = None,
+        start: int | None = None,
+        end: int | None = None,
+        where_clause: str | None = None,
+        files: list[str] | None = None,
+        optimize_file_loading: bool = True,
+    ) -> list[object]: ...
     def delete_data_range(
         self,
         type_name: str,
@@ -8976,6 +8991,7 @@ def kraken_product_type_from_symbol(symbol: str) -> KrakenProductType: ...
 
 class BlackScholesGreeksResult:
     price: float
+    vol: float
     delta: float
     gamma: float
     vega: float
