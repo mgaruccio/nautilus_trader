@@ -105,8 +105,8 @@ class KalshiWeatherStrategyConfig(StrategyConfig, frozen=True):
     poll_interval_secs: int = 60
 
     # Series to trade
-    series_tickers: list[str] = ["KXHIGH"]
-    excluded_cities: list[str] = []
+    series_tickers: tuple[str, ...] = ("KXHIGH",)
+    excluded_cities: tuple[str, ...] = ()
 
     # Risk limits
     max_contracts_per_ticker: int = 5
@@ -153,7 +153,7 @@ class KalshiWeatherStrategy(Strategy):
 
     def __init__(self, config: KalshiWeatherStrategyConfig) -> None:
         super().__init__(config=config)
-        self.config: KalshiWeatherStrategyConfig = config
+        self._cfg = config
 
         # Internal state
         self._resting_orders: dict[str, RestingState] = {}
@@ -188,13 +188,13 @@ class KalshiWeatherStrategy(Strategy):
 
         self.clock.set_timer(
             name="poll_cycle",
-            interval=pd.Timedelta(seconds=self.config.poll_interval_secs),
+            interval=pd.Timedelta(seconds=self._cfg.poll_interval_secs),
         )
 
         self._log.info(
-            f"Strategy started: poll={self.config.poll_interval_secs}s, "
-            f"dry_run={self.config.dry_run}, "
-            f"deep_rest={'on' if self.config.deep_rest_enabled else 'off'}"
+            f"Strategy started: poll={self._cfg.poll_interval_secs}s, "
+            f"dry_run={self._cfg.dry_run}, "
+            f"deep_rest={'on' if self._cfg.deep_rest_enabled else 'off'}"
         )
 
     def on_timer(self, event) -> None:
@@ -235,7 +235,7 @@ class KalshiWeatherStrategy(Strategy):
             self._resting_orders.pop(ticker, None)
 
             # Place resting GTC sell
-            if not self.config.dry_run:
+            if not self._cfg.dry_run:
                 self._place_sell(ticker, fill_qty, fill_price)
 
     def on_order_canceled(self, event: OrderCanceled) -> None:
@@ -312,8 +312,8 @@ class KalshiWeatherStrategy(Strategy):
             from kalshi_weather_ml.config import load_config as load_trader_config
 
             config_path = (
-                Path(self.config.trader_config_path)
-                if self.config.trader_config_path
+                Path(self._cfg.trader_config_path)
+                if self._cfg.trader_config_path
                 else None
             )
             self._trader_config = load_trader_config(config_path)
@@ -332,8 +332,8 @@ class KalshiWeatherStrategy(Strategy):
             from kalshi_weather_ml.config import load_config as load_trader_config
 
             config_path = (
-                Path(self.config.trader_config_path)
-                if self.config.trader_config_path
+                Path(self._cfg.trader_config_path)
+                if self._cfg.trader_config_path
                 else None
             )
             self._trader_config = load_trader_config(config_path)
@@ -367,7 +367,7 @@ class KalshiWeatherStrategy(Strategy):
         opportunities: list[Opportunity] = []
         for market in markets:
             city = market["city"]
-            if city in self.config.excluded_cities:
+            if city in self._cfg.excluded_cities:
                 continue
 
             settlement_date = market["settlement_date"]
@@ -432,9 +432,9 @@ class KalshiWeatherStrategy(Strategy):
 
     def _risk_check(self, opp: Opportunity) -> bool:
         # 1. Cost ceiling
-        if opp.side == "no" and opp.cost_cents > self.config.cost_cap_no_cents:
+        if opp.side == "no" and opp.cost_cents > self._cfg.cost_cap_no_cents:
             return False
-        if opp.side == "yes" and opp.cost_cents > self.config.cost_cap_yes_cents:
+        if opp.side == "yes" and opp.cost_cents > self._cfg.cost_cap_yes_cents:
             return False
 
         # 2. Duplicate: already resting or in position
@@ -444,7 +444,7 @@ class KalshiWeatherStrategy(Strategy):
             return False
 
         # 3. Daily loss limit
-        if self._daily_loss_cents >= self.config.max_daily_loss_cents:
+        if self._daily_loss_cents >= self._cfg.max_daily_loss_cents:
             self._log.info("Daily loss limit reached, rejecting signal")
             return False
 
@@ -461,16 +461,16 @@ class KalshiWeatherStrategy(Strategy):
     # ------------------------------------------------------------------
 
     def _execute_opportunity(self, opp: Opportunity) -> None:
-        mode = OrderMode.DEEP_REST if self.config.deep_rest_enabled else OrderMode.NORMAL
+        mode = OrderMode.DEEP_REST if self._cfg.deep_rest_enabled else OrderMode.NORMAL
 
         # Cap deep rest orders
         if mode == OrderMode.DEEP_REST:
             deep_rest_count = sum(
                 1 for r in self._resting_orders.values() if r.mode == OrderMode.DEEP_REST
             )
-            if deep_rest_count >= self.config.max_deep_rest_orders:
+            if deep_rest_count >= self._cfg.max_deep_rest_orders:
                 self._log.info(
-                    f"Deep rest cap ({self.config.max_deep_rest_orders}), "
+                    f"Deep rest cap ({self._cfg.max_deep_rest_orders}), "
                     f"falling back to NORMAL for {opp.ticker}"
                 )
                 mode = OrderMode.NORMAL
@@ -479,7 +479,7 @@ class KalshiWeatherStrategy(Strategy):
         if mode == OrderMode.DEEP_REST:
             order_price = OrderPrice(
                 side=opp.side,
-                price_cents=self.config.deep_rest_max_price_cents,
+                price_cents=self._cfg.deep_rest_max_price_cents,
                 is_maker=True,
                 time_in_force="good_till_canceled",
                 phase=ExecutionPhase.DEEP_REST,
@@ -489,18 +489,18 @@ class KalshiWeatherStrategy(Strategy):
             phase = determine_phase(
                 opp.h_to_peak,
                 spread,
-                patient_hours=self.config.patient_hours,
-                maker_hours=self.config.maker_hours,
-                aggressive_hours=self.config.aggressive_hours,
+                patient_hours=self._cfg.patient_hours,
+                maker_hours=self._cfg.maker_hours,
+                aggressive_hours=self._cfg.aggressive_hours,
             )
             order_price = phase_price(phase, opp.side, opp.yes_bid, opp.yes_ask)
 
         contracts = min(
-            self.config.max_contracts_per_ticker,
-            self.config.yes_max_contracts if opp.side == "yes" else self.config.max_contracts_per_ticker,
+            self._cfg.max_contracts_per_ticker,
+            self._cfg.yes_max_contracts if opp.side == "yes" else self._cfg.max_contracts_per_ticker,
         )
 
-        if self.config.dry_run:
+        if self._cfg.dry_run:
             self._log.info(
                 f"[DRY RUN] {order_price.phase.value} {opp.side} {opp.ticker} "
                 f"@ {order_price.price_cents}c x{contracts}"
@@ -524,7 +524,7 @@ class KalshiWeatherStrategy(Strategy):
 
         # Track resting maker orders
         if order_price.is_maker:
-            ttl = self.config.deep_rest_ttl_hours if mode == OrderMode.DEEP_REST else None
+            ttl = self._cfg.deep_rest_ttl_hours if mode == OrderMode.DEEP_REST else None
             self._resting_orders[opp.ticker] = RestingState(
                 ticker=opp.ticker,
                 client_order_id=order.client_order_id,
@@ -556,7 +556,7 @@ class KalshiWeatherStrategy(Strategy):
                 # Try to infer side from the resting state we just removed
                 break
 
-        sell_price = self.config.sell_target_cents
+        sell_price = self._cfg.sell_target_cents
 
         order = self.order_factory.limit(
             instrument_id=instrument_id,
@@ -583,7 +583,7 @@ class KalshiWeatherStrategy(Strategy):
             if resting.mode != OrderMode.NORMAL:
                 continue
             age = now - resting.placed_at
-            if age > timedelta(minutes=self.config.escalation_minutes):
+            if age > timedelta(minutes=self._cfg.escalation_minutes):
                 stale.append(ticker)
 
         for ticker in stale:
@@ -630,7 +630,7 @@ class KalshiWeatherStrategy(Strategy):
         resting = self._resting_orders.pop(ticker, None)
         if resting is None:
             return
-        if self.config.dry_run:
+        if self._cfg.dry_run:
             return
 
         order = self.cache.order(resting.client_order_id)
@@ -662,14 +662,14 @@ class KalshiWeatherStrategy(Strategy):
             if p_win is None:
                 continue
 
-            if p_win >= self.config.danger_exit_threshold:
+            if p_win >= self._cfg.danger_exit_threshold:
                 continue
 
             self._log.warning(
-                f"DANGER EXIT: {ticker} p_win={p_win:.3f} < {self.config.danger_exit_threshold}"
+                f"DANGER EXIT: {ticker} p_win={p_win:.3f} < {self._cfg.danger_exit_threshold}"
             )
 
-            if not self.config.dry_run:
+            if not self._cfg.dry_run:
                 # Cancel any resting sell for this ticker
                 for coid in list(self._sell_order_ids):
                     if self._client_to_ticker.get(coid) == ticker:
@@ -741,7 +741,7 @@ class KalshiWeatherStrategy(Strategy):
         self._daily_loss_cents += loss_cents
         self._log.info(
             f"Loss recorded: {loss_cents}c (daily total: {self._daily_loss_cents}c / "
-            f"{self.config.max_daily_loss_cents}c limit)"
+            f"{self._cfg.max_daily_loss_cents}c limit)"
         )
 
     @staticmethod
