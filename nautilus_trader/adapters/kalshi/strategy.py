@@ -204,7 +204,14 @@ class KalshiWeatherStrategy(Strategy):
         try:
             self._run_cycle()
         except Exception as e:
-            self._log.error(f"Cycle failed: {e}")
+            self._consecutive_failures = getattr(self, "_consecutive_failures", 0) + 1
+            self._log.error(
+                f"Cycle failed ({self._consecutive_failures}/3): {e}",
+                exc_info=True,
+            )
+            if self._consecutive_failures >= 3:
+                self._log.critical("HALTING: 3 consecutive cycle failures")
+                self.stop()
 
     def on_order_filled(self, event: OrderFilled) -> None:
         ticker = self._client_to_ticker.get(event.client_order_id)
@@ -307,50 +314,75 @@ class KalshiWeatherStrategy(Strategy):
     # Signal generation (bridge to kalshi-weather)
     # ------------------------------------------------------------------
 
-    def _load_models(self) -> None:
-        try:
-            from kalshi_weather_ml.config import load_config as load_trader_config
+    def _resolve_trader_config_path(self) -> Path:
+        """Resolve trader config path. Fails hard if not found."""
+        if self._cfg.trader_config_path:
+            p = Path(self._cfg.trader_config_path)
+            if not p.exists():
+                raise FileNotFoundError(f"Trader config not found: {p}")
+            return p
 
-            config_path = (
-                Path(self._cfg.trader_config_path)
-                if self._cfg.trader_config_path
-                else None
-            )
-            self._trader_config = load_trader_config(config_path)
-            self._models, self._model_names, self._model_weights = (
-                self._load_ensemble_models(self._trader_config)
-            )
-            self._log.info(
-                f"Loaded {len(self._models)} ML models: {self._model_names}"
-            )
-        except Exception as e:
-            self._log.warning(f"Failed to load ML models: {e}")
-            self._models = []
+        import importlib.util
+
+        candidates = [
+            Path("/home/kalshi/kalshi-weather/data/trader_config.json"),
+            Path.home() / "code" / "altmarkets" / "kalshi-weather" / "data" / "trader_config.json",
+        ]
+        spec = importlib.util.find_spec("kalshi_weather_ml")
+        if spec and spec.origin:
+            pkg_src = Path(spec.origin).resolve().parent
+            for depth in [3, 2, 1]:
+                candidate = pkg_src
+                for _ in range(depth):
+                    candidate = candidate.parent
+                candidate = candidate / "data" / "trader_config.json"
+                if candidate not in candidates:
+                    candidates.append(candidate)
+
+        for candidate in candidates:
+            if candidate.exists():
+                self._log.info(f"Resolved trader config: {candidate}")
+                return candidate
+
+        raise FileNotFoundError(
+            f"No trader_config.json found in: {[str(c) for c in candidates]}. "
+            f"Set trader_config_path in strategy config."
+        )
+
+    def _load_models(self) -> None:
+        """Load ML models. Raises on failure — strategy cannot run without models."""
+        from kalshi_weather_ml.config import load_config as load_trader_config
+
+        resolved = self._resolve_trader_config_path()
+        self._trader_config = load_trader_config(resolved)
+        self._log.info(
+            f"Loaded trader config: max_contracts={self._trader_config.max_contracts_per_ticker}"
+        )
+        self._models, self._model_names, self._model_weights = (
+            self._load_ensemble_models(self._trader_config)
+        )
+        if not self._models:
+            raise RuntimeError("No ML models loaded — strategy cannot run")
+        self._log.info(
+            f"Loaded {len(self._models)} ML models: {self._model_names}"
+        )
 
     def _reload_trader_config(self) -> None:
         try:
             from kalshi_weather_ml.config import load_config as load_trader_config
 
-            config_path = (
-                Path(self._cfg.trader_config_path)
-                if self._cfg.trader_config_path
-                else None
-            )
-            self._trader_config = load_trader_config(config_path)
-        except Exception:
-            pass  # keep existing config
+            resolved = self._resolve_trader_config_path()
+            self._trader_config = load_trader_config(resolved)
+        except Exception as e:
+            self._log.warning(f"Config hot-reload failed (keeping existing): {e}")
 
     def _generate_signals(self) -> list[Opportunity]:
         if not self._models or self._trader_config is None:
             return []
 
-        try:
-            from kalshi_weather_ml.forecasts import CONSENSUS_MODEL, PRIMARY_MODEL, get_forecast
-            from kalshi_weather_ml.markets import fetch_open_markets
-            from kalshi_weather_ml.strategy import evaluate_opportunity_ensemble
-        except ImportError as e:
-            self._log.warning(f"kalshi-weather not available: {e}")
-            return []
+        from kalshi_weather_ml.forecasts import CONSENSUS_MODEL, PRIMARY_MODEL, get_forecast
+        from kalshi_weather_ml.markets import fetch_open_markets
+        from kalshi_weather_ml.strategy import evaluate_opportunity_ensemble
 
         from datetime import datetime as dt
         from zoneinfo import ZoneInfo
@@ -358,11 +390,7 @@ class KalshiWeatherStrategy(Strategy):
         now = dt.now(ZoneInfo("America/New_York"))
         tc = self._trader_config
 
-        try:
-            markets = fetch_open_markets()
-        except Exception as e:
-            self._log.warning(f"Failed to fetch markets: {e}")
-            return []
+        markets = fetch_open_markets()  # raises on API failure
 
         opportunities: list[Opportunity] = []
         for market in markets:
@@ -375,7 +403,8 @@ class KalshiWeatherStrategy(Strategy):
             try:
                 ecmwf = get_forecast(city, settlement_date, model=PRIMARY_MODEL)
                 gfs = get_forecast(city, settlement_date, model=CONSENSUS_MODEL)
-            except Exception:
+            except Exception as e:
+                self._log.warning(f"Forecast failed for {city}/{settlement_date}: {e}")
                 continue
 
             if ecmwf is None or gfs is None:
@@ -393,7 +422,8 @@ class KalshiWeatherStrategy(Strategy):
                     now=now,
                     require_unanimous=tc.ensemble_require_unanimous,
                 )
-            except Exception:
+            except Exception as e:
+                self._log.warning(f"Ensemble eval failed for {market.get('ticker', '?')}: {e}")
                 continue
 
             for opp in opps:
@@ -730,7 +760,8 @@ class KalshiWeatherStrategy(Strategy):
             if opps:
                 return max(o.p_win for o in opps)
             return None
-        except Exception:
+        except Exception as e:
+            self._log.warning(f"Danger exit eval failed for {ticker}: {e}")
             return None
 
     # ------------------------------------------------------------------
@@ -794,6 +825,5 @@ class KalshiWeatherStrategy(Strategy):
                 weights.append(config.ensemble_weights.get("ngboost", 1.0))
 
             return models, names, weights
-        except Exception:
-            log.exception("Failed to load ensemble models")
-            return [], [], []
+        except Exception as e:
+            raise RuntimeError(f"Failed to load ensemble models: {e}") from e
